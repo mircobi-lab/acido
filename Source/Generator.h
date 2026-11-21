@@ -1,5 +1,6 @@
 #pragma once
 #include "Pattern.h"
+#include "Params.h"
 #include <juce_core/juce_core.h>
 
 /*  Generatore casuale di acido.
@@ -26,4 +27,8 @@ struct Result
 // what: 0 = BASS 1, 1 = BASS 2, 2 = batteria, 3 = tutto.
 // Se il pattern ha già una tonalità e si rigenera una sola traccia, la tonalità resta la stessa.
 Result generate (PatternStore&, int pattern, int what, int style, juce::Random&);
+
+/*  Suoni adatti allo stile: valori per i parametri timbrici (filtro, inviluppi, drive, voci della batteria, delay).
+    Livelli, pan, mute e master non vengono toccati. what come sopra: 0 BASS 1, 1 BASS 2, 2 batteria, 3 tutto.   */
+std::vector<std::pair<P, float>> sounds (int style, int what, juce::Random&);
 }

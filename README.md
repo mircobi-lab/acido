@@ -33,6 +33,13 @@ xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"MBStudio91 acido.v
 
   La batteria parte dai modelli tipici dello stile e cambia ogni volta: cassa in quattro nell'acid e nella techno, cassa sincopata e campanaccio nel funk, cassa spezzata e rullate di charleston nell'hip hop. BASS 1 ripete un motivo di 4 o 8 passi con variazioni; nell'hip hop e nell'R&B segue la cassa con note lunghe e glissati. BASS 2 risponde più in alto sulle note dell'accordo, dove BASS 1 tace.
 
+  Con il tasto SND acceso (lo è di partenza) RANDOM regola anche i suoni secondo lo stile:
+  - forma d'onda, filtro, inviluppi, accento, drive e mandate dei due bassi;
+  - tono e decay delle voci della batteria;
+  - tempo, feedback e tono del delay.
+
+  Ogni volta pesca valori diversi dentro un intervallo pensato per lo stile. Nell'hip hop e nell'R&B BASS 1 diventa un basso tipo 808: filtro chiuso, poca risonanza, coda lunga e un po' di saturazione. Livelli, pan, mute e master restano quelli tuoi. Con SND spento cambiano solo note e ritmi. RND TRK regola solo i suoni della traccia che rigenera.
+
   RANDOM imposta anche tempo e swing adatti allo stile. Dentro una DAW comanda però il tempo del progetto. RND TRK rigenera solo la traccia scelta e resta nella stessa tonalità. La tonalità del pattern in modifica compare sotto i tasti, alla voce KEY.
 - **TRANSPORT**: dentro la DAW segue il tempo e la posizione del progetto. Senza DAW che suona (o nella versione Standalone) usa TEMPO e il tasto RUN. SWING da 50% (dritto) a 75%. Il cambio di pattern durante la riproduzione avviene a fine battuta.
 - **DELAY** stereo ping-pong a tempo (da 1/16 a 1/2, compreso 3/16), con FEEDBACK, TONE e RETURN. Ogni traccia ha la sua mandata.
@@ -44,6 +51,7 @@ xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"MBStudio91 acido.v
 - Render offline degli 8 pattern a 48 kHz (`tools/render.cpp`): nessun valore non valido, picchi tra -4 e -7 dBFS, RMS tra -17 e -22 dBFS con il MASTER a -7 dB. Un blocco da 256 campioni usa tra l'1,6 e il 2,9% del tempo disponibile (server Linux, un solo core).
 - Clock della DAW simulato a 120 BPM: 32 passi in 4 secondi, come previsto.
 - MIDI: nota sul canale 1 e cassa sul canale 10 suonano.
+- Suoni del RANDOM: tutti i valori restano dentro i limiti delle manopole. BASS 1 da solo, con i suoni dello stile, sta tra -19 e -22 dBFS RMS, quindi nemmeno il basso tipo 808 dell'hip hop sparisce.
 - Generatore: 200 pattern per stile senza nessuna nota fuori scala. Rigenerando una sola traccia la tonalità resta la stessa. Un esempio per stile, fatto suonare e misurato, ha il picco tra -2,7 e -4,9 dBFS.
 - Compilazione VST3 e Standalone su Linux senza errori. Il controllo con pluginval (strictness 10) gira su GitHub Actions a ogni aggiornamento.
 

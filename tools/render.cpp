@@ -180,6 +180,14 @@ int main (int argc, char** argv)
             setParam (dummy, "PATTERN", 1.f);
             setParam (dummy, "BPM", res.bpm);
             setParam (dummy, "SWING", res.swing);
+            int bad = 0;
+            for (const auto& [pid, v] : acido::gen::sounds (res.style, 3, rng))
+            {
+                const auto& d = acido::paramDefs()[(size_t) pid];
+                if (v < d.min || v > d.max) ++bad;
+                setParam (dummy, d.key, v);
+            }
+            if (bad) { std::printf ("suoni fuori intervallo: %d\n", bad); allOk = false; }
             setParam (dummy, "B1MUTE", 0); setParam (dummy, "B2MUTE", 0); setParam (dummy, "DRMUTE", 0);
             setParam (dummy, "RUN", 1);
             acido::Engine eng (one);
@@ -194,6 +202,28 @@ int main (int argc, char** argv)
                 eng.process (buf, midi, reader, false, 0, 0);
                 for (int c = 0; c < 2; ++c) all.copyFrom (c, pos, buf, c, 0, len);
             }
+            // BASS 1 da solo, per controllare che il suono dello stile non sparisca
+            float soloRms = 0;
+            {
+                setParam (dummy, "B2MUTE", 1); setParam (dummy, "DRMUTE", 1);
+                setParam (dummy, "RUN", 0);
+                acido::Engine solo (one);
+                solo.prepare (sr, block);
+                eng.process (buf, midi, reader, false, 0, 0);
+                setParam (dummy, "RUN", 1);
+                juce::AudioBuffer<float> sb (2, total);
+                for (int pos = 0; pos < total; pos += block)
+                {
+                    const int len = juce::jmin (block, total - pos);
+                    buf.setSize (2, len, false, false, true); buf.clear();
+                    solo.process (buf, midi, reader, false, 0, 0);
+                    for (int c = 0; c < 2; ++c) sb.copyFrom (c, pos, buf, c, 0, len);
+                }
+                soloRms = sb.getRMSLevel (0, 0, total);
+                setParam (dummy, "B2MUTE", 0); setParam (dummy, "DRMUTE", 0);
+            }
+            std::printf ("   BASS 1 da solo: RMS %.1f dBFS\n", juce::Decibels::gainToDecibels (soloRms, -120.f));
+            if (soloRms < juce::Decibels::decibelsToGain (-30.f)) allOk = false;
             const float peak = all.getMagnitude (0, total);
             std::printf ("esempio %-8s %s %s  %.1f BPM  swing %.1f%%  picco %.1f dBFS\n", acido::gen::styleName (style),
                          acido::gen::keyName (res.root).toRawUTF8(), acido::gen::scaleName (res.scale), res.bpm, res.swing,

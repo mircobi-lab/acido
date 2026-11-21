@@ -285,6 +285,9 @@ AcidoPanel::AcidoPanel (AcidoProcessor& p)
 
     // generatore casuale
     style = makeCtl (GENSTYLE, "RANDOM", C::ledAmber);
+    soundLock = makeCtl (GENSOUND, "RANDOM", C::ledGreen);
+    soundLock->button.getProperties().set ("ledColour", ledHex (C::ledGreen));
+    soundLock->button.setTooltip ("SND acceso: RANDOM regola anche i suoni (filtri, inviluppi, drive, batteria, delay) secondo lo stile. Spento: i suoni restano quelli tuoi");
     randomBtn.setTooltip ("Genera un pattern nuovo (bassi e batteria) nello stile scelto, con una scala adatta; imposta anche tempo e swing");
     randomBtn.getProperties().set ("led", true);
     randomBtn.getProperties().set ("ledColour", ledHex (C::ledAmber));
@@ -384,8 +387,14 @@ void AcidoPanel::randomize (bool wholePattern)
     static const char* trackNames[] = { "BASS 1", "BASS 2", "DRUMS" };
     const int pat = juce::jlimit (0, numPatterns - 1, (int) std::lround (proc.paramValue (PATTERN)) - 1);
     const int st = (int) std::lround (proc.paramValue (GENSTYLE));
-    const auto res = gen::generate (proc.patterns, pat, wholePattern ? 3 : grid.getTrack(), st, rng);
+    const int what = wholePattern ? 3 : grid.getTrack();
+    const auto res = gen::generate (proc.patterns, pat, what, st, rng);
     juce::String info = gen::keyName (res.root) + " " + gen::scaleName (res.scale);
+    if (proc.paramValue (GENSOUND) > .5f)
+    {
+        for (const auto& [p, v] : gen::sounds (res.style, what, rng)) proc.setParamValue (p, v);
+        info << "  +SND";
+    }
     if (wholePattern)
     {
         proc.setParamValue (BPM, res.bpm);
@@ -449,7 +458,8 @@ void AcidoPanel::resized()
     seqArea = { margin, 308, baseW - 2 * margin, 310 };
     for (int t = 0; t < 3; ++t) trackBtn[t].setBounds (margin, 328 + t * 31, 124, 28);
     style->cell = {};
-    style->combo.setBounds (margin, 438, 124, 24);
+    style->combo.setBounds (margin, 438, 78, 24);
+    soundLock->button.setBounds (margin + 82, 438, 42, 24);
     randomBtn.setBounds (margin, 466, 124, 28);
     rndTrackBtn.setBounds (margin, 498, 60, 26);
     clearBtn.setBounds (margin + 64, 498, 60, 26);

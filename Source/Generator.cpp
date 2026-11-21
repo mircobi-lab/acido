@@ -363,3 +363,99 @@ Result generate (PatternStore& ps, int pattern, int what, int style, juce::Rando
     return res;
 }
 }
+
+// --------------------------------------------------------------------------------------- suoni
+namespace acido::gen
+{
+namespace
+{
+struct BassSound { float sawProb; float cut[2], res[2], env[2], dec[2], acc[2], drive[2], send[2]; };
+struct DrumSound { float bdTone[2], bdDec[2], sdTone[2], sdSnap[2], ohDec[2], cyDec[2], tomTune[2], ac[2], send[2]; };
+struct FxSound   { std::vector<int> times; float fb[2], tone[2]; };
+struct Palette   { BassSound b1, b2; DrumSound dr; FxSound fx; };
+
+// Tavolozze per stile: intervalli entro cui il generatore sceglie (0..1 come le manopole).
+const Palette& palette (int style)
+{
+    static const Palette acid {
+        { 1.f,  { .18f, .38f }, { .68f, .88f }, { .50f, .78f }, { .30f, .60f }, { .60f, .90f }, { .20f, .45f }, { .10f, .22f } },
+        { .4f,  { .35f, .55f }, { .50f, .72f }, { .40f, .62f }, { .20f, .42f }, { .50f, .75f }, { .10f, .30f }, { .20f, .38f } },
+        { { .30f, .45f }, { .45f, .62f }, { .45f, .60f }, { .50f, .72f }, { .28f, .45f }, { .40f, .60f }, { .40f, .60f }, { .55f, .75f }, { 0.f, .08f } },
+        { { 2 }, { .35f, .52f }, { .45f, .65f } } };
+    static const Palette techno {
+        { 1.f,  { .12f, .30f }, { .50f, .78f }, { .32f, .55f }, { .18f, .40f }, { .55f, .80f }, { .30f, .58f }, { .05f, .15f } },
+        { .2f,  { .28f, .46f }, { .60f, .82f }, { .35f, .55f }, { .15f, .35f }, { .50f, .75f }, { .20f, .40f }, { .18f, .35f } },
+        { { .22f, .35f }, { .60f, .78f }, { .40f, .55f }, { .45f, .62f }, { .25f, .40f }, { .45f, .70f }, { .35f, .55f }, { .55f, .75f }, { 0.f, .10f } },
+        { { 2, 1 }, { .30f, .48f }, { .35f, .55f } } };
+    static const Palette funk {
+        { .5f,  { .28f, .46f }, { .28f, .50f }, { .40f, .62f }, { .12f, .30f }, { .45f, .70f }, { .08f, .25f }, { 0.f, .08f } },
+        { .7f,  { .42f, .60f }, { .30f, .52f }, { .30f, .50f }, { .12f, .30f }, { .40f, .65f }, { .05f, .20f }, { .10f, .25f } },
+        { { .40f, .55f }, { .35f, .50f }, { .50f, .66f }, { .50f, .72f }, { .25f, .40f }, { .35f, .55f }, { .45f, .65f }, { .50f, .70f }, { 0.f, .05f } },
+        { { 1 }, { .18f, .35f }, { .45f, .65f } } };
+    static const Palette hiphop {   // BASS 1 come un basso 808: filtro chiuso, poca risonanza, coda lunga, un po' di saturazione
+        { .3f,  { .07f, .18f }, { .04f, .20f }, { .05f, .20f }, { .70f, .95f }, { .20f, .40f }, { .25f, .45f }, { 0.f, .05f } },
+        { .8f,  { .32f, .50f }, { .15f, .38f }, { .12f, .30f }, { .60f, .85f }, { .20f, .40f }, { .05f, .20f }, { .28f, .45f } },
+        { { .18f, .30f }, { .75f, .95f }, { .35f, .50f }, { .40f, .60f }, { .25f, .40f }, { .55f, .80f }, { .30f, .50f }, { .45f, .65f }, { 0.f, .06f } },
+        { { 3, 4 }, { .30f, .45f }, { .35f, .55f } } };
+    static const Palette rnb {
+        { .2f,  { .08f, .20f }, { .08f, .25f }, { .08f, .25f }, { .72f, .95f }, { .15f, .35f }, { .10f, .25f }, { 0.f, .05f } },
+        { .9f,  { .38f, .55f }, { .18f, .35f }, { .18f, .35f }, { .65f, .90f }, { .20f, .35f }, { 0.f, .12f }, { .32f, .50f } },
+        { { .22f, .35f }, { .55f, .75f }, { .40f, .55f }, { .35f, .55f }, { .30f, .45f }, { .55f, .80f }, { .35f, .55f }, { .40f, .60f }, { .02f, .10f } },
+        { { 3 }, { .35f, .50f }, { .30f, .50f } } };
+    switch (style)
+    {
+        case TECHNO: return techno;
+        case FUNK:   return funk;
+        case HIPHOP: return hiphop;
+        case RNB:    return rnb;
+        default:     return acid;
+    }
+}
+
+float in (juce::Random& r, const float (&range)[2]) { return range[0] + r.nextFloat() * (range[1] - range[0]); }
+}
+
+std::vector<std::pair<P, float>> sounds (int style, int what, juce::Random& r)
+{
+    const auto& pal = palette (style);
+    std::vector<std::pair<P, float>> out;
+    auto bass = [&] (int t, const BassSound& b)
+    {
+        const int o = t == 0 ? 0 : (int) (B2WAVE - B1WAVE);
+        auto id = [o] (P p) { return (P) (p + o); };
+        out.push_back ({ id (B1WAVE), r.nextFloat() < b.sawProb ? 0.f : 1.f });
+        out.push_back ({ id (B1TUNE), 0.f });
+        out.push_back ({ id (B1CUT), in (r, b.cut) });
+        out.push_back ({ id (B1RES), in (r, b.res) });
+        out.push_back ({ id (B1ENV), in (r, b.env) });
+        out.push_back ({ id (B1DEC), in (r, b.dec) });
+        out.push_back ({ id (B1ACC), in (r, b.acc) });
+        out.push_back ({ id (B1DRIVE), in (r, b.drive) });
+        out.push_back ({ id (B1SEND), in (r, b.send) });
+    };
+    if (what == 0 || what == 3) bass (0, pal.b1);
+    if (what == 1 || what == 3) bass (1, pal.b2);
+    if (what == 2 || what == 3)
+    {
+        const auto& d = pal.dr;
+        out.push_back ({ BDTONE, in (r, d.bdTone) });
+        out.push_back ({ BDDEC, in (r, d.bdDec) });
+        out.push_back ({ SDTONE, in (r, d.sdTone) });
+        out.push_back ({ SDSNAP, in (r, d.sdSnap) });
+        out.push_back ({ OHDEC, in (r, d.ohDec) });
+        out.push_back ({ CYDEC, in (r, d.cyDec) });
+        const float tune = in (r, d.tomTune);
+        out.push_back ({ LTTUNE, tune }); out.push_back ({ MTTUNE, tune }); out.push_back ({ HTTUNE, tune });
+        out.push_back ({ AC, in (r, d.ac) });
+        out.push_back ({ DRSEND, in (r, d.send) });
+    }
+    if (what == 3)
+    {
+        const auto& f = pal.fx;
+        out.push_back ({ DLTIME, (float) f.times[(size_t) r.nextInt ((int) f.times.size())] });
+        out.push_back ({ DLFB, in (r, f.fb) });
+        out.push_back ({ DLTONE, in (r, f.tone) });
+    }
+    return out;
+}
+}

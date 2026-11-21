@@ -73,6 +73,7 @@ private:
     Ctl* master = nullptr;
     Ctl* run = nullptr;
     Ctl* style = nullptr;
+    Ctl* soundLock = nullptr;
     juce::TextButton randomBtn { "RANDOM" }, rndTrackBtn { "RND TRK" };
     juce::Random rng;
     void randomize (bool wholePattern);

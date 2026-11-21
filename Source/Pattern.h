@@ -38,6 +38,8 @@ struct BassStep
     int midiNote (int transpose) const noexcept { return 36 + note + 12 * octave + transpose; }   // C2 = 36
 };
 
+struct KeyInfo { int root = -1, scale = -1, style = -1; };    // tonalità scelta dal generatore (-1 = nessuna)
+
 class PatternStore
 {
 public:
@@ -48,6 +50,9 @@ public:
     bool drum (int pattern, int row, int step) const noexcept;
     uint32_t drumRow (int pattern, int row) const noexcept;
     void setDrum (int pattern, int row, int step, bool on) noexcept;
+
+    KeyInfo key (int pattern) const noexcept;
+    void setKey (int pattern, KeyInfo) noexcept;
 
     void clearTrack (int pattern, int track);       // track 0/1 basso, 2 batteria
     void copyPattern (int from, int to);
@@ -60,6 +65,7 @@ public:
 private:
     std::array<std::atomic<uint32_t>, numPatterns * numBass * numSteps> b {};
     std::array<std::atomic<uint32_t>, numPatterns * (numDrums + 1)> d {};
+    std::array<std::atomic<int>, numPatterns * 3> keys {};
     std::atomic<uint32_t> ver { 1 };
     void touch() noexcept { ver.fetch_add (1); }
     static size_t bi (int p, int t, int s) noexcept { return (size_t) ((p * numBass + t) * numSteps + s); }

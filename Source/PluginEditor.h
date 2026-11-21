@@ -1,5 +1,6 @@
 #pragma once
 #include "PluginProcessor.h"
+#include "Generator.h"
 #include "MBStudioLookAndFeel.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 
@@ -71,6 +72,10 @@ private:
     Ctl* swing = nullptr;
     Ctl* master = nullptr;
     Ctl* run = nullptr;
+    Ctl* style = nullptr;
+    juce::TextButton randomBtn { "RANDOM" }, rndTrackBtn { "RND TRK" };
+    juce::Random rng;
+    void randomize (bool wholePattern);
 
     juce::TextButton patBtn[acido::numPatterns];
     juce::TextButton trackBtn[3], clearBtn { "CLEAR" }, copyBtn { "COPY" }, pasteBtn { "PASTE" }, factoryBtn { "FACTORY" }, panicBtn { "PANIC" };

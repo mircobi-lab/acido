@@ -30,6 +30,17 @@ void PatternStore::setDrum (int p, int r, int s, bool on) noexcept
     touch();
 }
 
+KeyInfo PatternStore::key (int p) const noexcept
+{
+    return { keys[(size_t) p * 3].load(), keys[(size_t) p * 3 + 1].load(), keys[(size_t) p * 3 + 2].load() };
+}
+
+void PatternStore::setKey (int p, KeyInfo k) noexcept
+{
+    keys[(size_t) p * 3].store (k.root); keys[(size_t) p * 3 + 1].store (k.scale); keys[(size_t) p * 3 + 2].store (k.style);
+    touch();
+}
+
 void PatternStore::clearTrack (int p, int track)
 {
     if (track < numBass)
@@ -45,6 +56,7 @@ void PatternStore::copyPattern (int from, int to)
     for (int t = 0; t < numBass; ++t)
         for (int s = 0; s < numSteps; ++s) b[bi (to, t, s)].store (b[bi (from, t, s)].load());
     for (int r = 0; r <= numDrums; ++r) d[di (to, r)].store (d[di (from, r)].load());
+    for (int k = 0; k < 3; ++k) keys[(size_t) (to * 3 + k)].store (keys[(size_t) (from * 3 + k)].load());
     touch();
 }
 
@@ -130,6 +142,7 @@ void PatternStore::loadFactory()
         parseBass (*this, p, 0, factory[p].bass1);
         parseBass (*this, p, 1, factory[p].bass2);
         for (int r = 0; r <= numDrums; ++r) parseDrum (*this, p, r, factory[p].drums[(size_t) r]);
+        setKey (p, {});
     }
     touch();
 }
@@ -151,6 +164,8 @@ juce::ValueTree PatternStore::toValueTree() const
         juce::StringArray dv;
         for (int r = 0; r <= numDrums; ++r) dv.add (juce::String::toHexString ((int) d[di (p, r)].load()));
         pt.setProperty ("drums", dv.joinIntoString (" "), nullptr);
+        const auto k = key (p);
+        pt.setProperty ("key", juce::String (k.root) + " " + juce::String (k.scale) + " " + juce::String (k.style), nullptr);
         t.appendChild (pt, nullptr);
     }
     return t;
@@ -170,6 +185,8 @@ void PatternStore::fromValueTree (const juce::ValueTree& t)
         }
         auto dv = juce::StringArray::fromTokens (pt.getProperty ("drums").toString(), " ", "");
         for (int r = 0; r <= numDrums && r < dv.size(); ++r) d[di (p, r)].store ((uint32_t) dv[r].getHexValue32() & 0xffffu);
+        auto kv = juce::StringArray::fromTokens (pt.getProperty ("key", "-1 -1 -1").toString(), " ", "");
+        if (kv.size() == 3) setKey (p, { kv[0].getIntValue(), kv[1].getIntValue(), kv[2].getIntValue() });
     }
     touch();
 }

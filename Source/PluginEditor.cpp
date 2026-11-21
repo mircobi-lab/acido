@@ -283,6 +283,17 @@ AcidoPanel::AcidoPanel (AcidoProcessor& p)
     };
     for (auto* b : { &clearBtn, &copyBtn, &pasteBtn, &factoryBtn }) addAndMakeVisible (*b);
 
+    // generatore casuale
+    style = makeCtl (GENSTYLE, "RANDOM", C::ledAmber);
+    randomBtn.setTooltip ("Genera un pattern nuovo (bassi e batteria) nello stile scelto, con una scala adatta; imposta anche tempo e swing");
+    randomBtn.getProperties().set ("led", true);
+    randomBtn.getProperties().set ("ledColour", ledHex (C::ledAmber));
+    randomBtn.onClick = [this] { randomize (true); };
+    rndTrackBtn.setTooltip ("Rigenera solo la traccia scelta, restando nella tonalita' del pattern");
+    rndTrackBtn.onClick = [this] { randomize (false); };
+    addAndMakeVisible (randomBtn);
+    addAndMakeVisible (rndTrackBtn);
+
     panicBtn.setTooltip ("MIDI PANIC: spegne subito tutte le note, ferma il sequencer interno e svuota il delay");
     panicBtn.getProperties().set ("led", true);
     panicBtn.getProperties().set ("ledColour", ledHex (C::ledRed));
@@ -368,6 +379,26 @@ void AcidoPanel::showTouched (const juce::String& what, const juce::String& valu
     repaint (displayArea);
 }
 
+void AcidoPanel::randomize (bool wholePattern)
+{
+    static const char* trackNames[] = { "BASS 1", "BASS 2", "DRUMS" };
+    const int pat = juce::jlimit (0, numPatterns - 1, (int) std::lround (proc.paramValue (PATTERN)) - 1);
+    const int st = (int) std::lround (proc.paramValue (GENSTYLE));
+    const auto res = gen::generate (proc.patterns, pat, wholePattern ? 3 : grid.getTrack(), st, rng);
+    juce::String info = gen::keyName (res.root) + " " + gen::scaleName (res.scale);
+    if (wholePattern)
+    {
+        proc.setParamValue (BPM, res.bpm);
+        proc.setParamValue (SWING, res.swing);
+        for (auto p : { B1LEN, B2LEN, DRLEN }) proc.setParamValue (p, 16.f);
+        info << "  " << juce::String (res.bpm, 1) << " BPM  SW " << juce::String (res.swing, 1) << "%";
+        showTouched (juce::String ("RANDOM ") + gen::styleName (res.style), info);
+    }
+    else showTouched (juce::String ("RANDOM ") + trackNames[grid.getTrack()], info);
+    grid.repaint();
+    repaint (seqArea);
+}
+
 void AcidoPanel::selectTrack (int t)
 {
     for (int i = 0; i < 3; ++i) trackBtn[i].setToggleState (i == t, juce::dontSendNotification);
@@ -416,11 +447,15 @@ void AcidoPanel::resized()
 
     // sequencer
     seqArea = { margin, 308, baseW - 2 * margin, 310 };
-    for (int t = 0; t < 3; ++t) trackBtn[t].setBounds (margin, 332 + t * 38, 124, 32);
-    clearBtn.setBounds (margin, 460, 124, 28);
-    copyBtn.setBounds (margin, 494, 60, 28);
-    pasteBtn.setBounds (margin + 64, 494, 60, 28);
-    factoryBtn.setBounds (margin, 528, 124, 28);
+    for (int t = 0; t < 3; ++t) trackBtn[t].setBounds (margin, 328 + t * 31, 124, 28);
+    style->cell = {};
+    style->combo.setBounds (margin, 438, 124, 24);
+    randomBtn.setBounds (margin, 466, 124, 28);
+    rndTrackBtn.setBounds (margin, 498, 60, 26);
+    clearBtn.setBounds (margin + 64, 498, 60, 26);
+    copyBtn.setBounds (margin, 528, 60, 26);
+    pasteBtn.setBounds (margin + 64, 528, 60, 26);
+    factoryBtn.setBounds (margin, 558, 124, 26);
     grid.setBounds (margin + 140, 328, baseW - 2 * margin - 140, 288);
 
     // batteria
@@ -522,11 +557,13 @@ void AcidoPanel::paint (juce::Graphics& g)
     }
 
     header (seqArea, "SEQUENCER", "CLICK = NOTE / STEP   -   DRAG = PAINT", trackLed (grid.getTrack()));
-    ui::paintPrinted (g, { (float) margin, 568.f, 124.f, 14.f }, "TRACK LENGTH", 11.f, juce::Justification::centredLeft, C::printDim);
+    ui::paintPrinted (g, { (float) margin, 422.f, 124.f, 14.f }, "RANDOM STYLE", 11.f, juce::Justification::centredLeft, C::printDim);
     {
-        const P lenP = grid.getTrack() == 0 ? B1LEN : grid.getTrack() == 1 ? B2LEN : DRLEN;
-        const auto len = juce::String ((int) std::lround (proc.paramValue (lenP))) + " STEPS";
-        ui::paintPrinted (g, { (float) margin, 584.f, 124.f, 20.f }, len, 18.f, juce::Justification::centredLeft, C::print);
+        const int pat = juce::jlimit (0, numPatterns - 1, (int) std::lround (proc.paramValue (PATTERN)) - 1);
+        const auto k = proc.patterns.key (pat);
+        const juce::String key = k.root >= 0 ? gen::keyName (k.root) + " " + gen::scaleName (k.scale) : juce::String ("FREE");
+        ui::paintPrinted (g, { (float) margin, 590.f, 124.f, 12.f }, "KEY", 10.f, juce::Justification::centredLeft, C::printDim);
+        ui::paintPrinted (g, { (float) margin + 22.f, 588.f, 104.f, 16.f }, key, 12.f, juce::Justification::centredLeft, C::print);
     }
 
     header (drumArea, "RHYTHM", "MIDI CH 10", C::ledAmber);

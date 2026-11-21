@@ -3,6 +3,7 @@
     - argomenti di prova: --pattern N  --track 1..3  --run  --shot FILE.png  (salva un'immagine del pannello ed esce)        */
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Generator.h"
 #include <juce_audio_plugin_client/juce_audio_plugin_client.h>
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 
@@ -63,6 +64,12 @@ public:
             const auto a = args[i], v = args[i + 1].unquoted();
             if (a == "--pattern") proc->setParamValue (acido::PATTERN, (float) v.getIntValue());
             else if (a == "--track") track = v.getIntValue() - 1;
+            else if (a == "--random")
+            {
+                juce::Random r (v.getIntValue() * 7919 + 1);
+                const int pat = (int) std::lround (proc->paramValue (acido::PATTERN)) - 1;
+                acido::gen::generate (proc->patterns, pat, 3, v.getIntValue(), r);
+            }
             else if (a == "--shot") shot = v;
             else if (a == "--profile") proc->midiMap.applyProfile (v.getIntValue());
             else if (a == "--learn") proc->midiMap.setLearnMode (true);

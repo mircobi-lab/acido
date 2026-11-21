@@ -61,7 +61,8 @@
     X (DLFB,    "DLFB",    "Delay Feedback",    "FEEDBACK",  R, 0, .95f, .45f, 0, "", "%") \
     X (DLTONE,  "DLTONE",  "Delay Tone",        "TONE",      R, 0, 1, .5f, 0, "", "%") \
     X (DLRET,   "DLRET",   "Delay Return",      "RETURN",    R, 0, 1, .7f, 0, "", "%") \
-    X (MASTER,  "MASTER",  "Master Volume",     "MASTER",    R, -36, 6, -7, 0, "", "dB")
+    X (MASTER,  "MASTER",  "Master Volume",     "MASTER",    R, -36, 6, -7, 0, "", "dB") \
+    X (GENSTYLE,"GENSTYLE","Random Style",      "STYLE",     C, 0, 5, 0, 0, "AUTO|ACID|TECHNO|FUNK|HIP HOP|R&B", "")
 
 namespace acido
 {

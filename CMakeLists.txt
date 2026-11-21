@@ -60,6 +60,7 @@ mbstudio_ui_add(MBStudio91Acido)
 target_sources(MBStudio91Acido PRIVATE
     Source/Params.cpp
     Source/Pattern.cpp
+    Source/Generator.cpp
     Source/Engine.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp)
@@ -90,7 +91,7 @@ target_link_libraries(MBStudio91Acido
 option(ACIDO_BUILD_TOOLS "Compila lo strumento di render di prova" OFF)
 if(ACIDO_BUILD_TOOLS)
     juce_add_console_app(acido_render PRODUCT_NAME "acido_render")
-    target_sources(acido_render PRIVATE tools/render.cpp Source/Params.cpp Source/Pattern.cpp Source/Engine.cpp)
+    target_sources(acido_render PRIVATE tools/render.cpp Source/Params.cpp Source/Pattern.cpp Source/Generator.cpp Source/Engine.cpp)
     target_include_directories(acido_render PRIVATE Source)
     target_compile_definitions(acido_render PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
     target_link_libraries(acido_render PRIVATE juce::juce_audio_utils juce::juce_audio_formats PUBLIC juce::juce_recommended_config_flags)

@@ -4,6 +4,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Engine.h"
+#include "Generator.h"
 #include <chrono>
 
 namespace
@@ -135,6 +136,76 @@ int main (int argc, char** argv)
         }
         std::printf ("MIDI nota canale 1 + cassa canale 10: picco %.1f dBFS\n", juce::Decibels::gainToDecibels (pk, -120.f));
         if (pk < 0.01f) allOk = false;
+    }
+    // prova 3: generatore casuale, 200 pattern per stile
+    {
+        juce::Random rng (1234);
+        acido::PatternStore ps;
+        for (int style = 0; style < acido::gen::numStyles; ++style)
+        {
+            int outOfScale = 0, notes1 = 0, notes2 = 0, kicks = 0, snares = 0, slides = 0, empty1 = 0;
+            for (int i = 0; i < 200; ++i)
+            {
+                const auto res = acido::gen::generate (ps, 0, 3, style, rng);
+                const auto& sc = acido::gen::scaleSteps (res.scale);
+                int n1 = 0;
+                for (int t = 0; t < 2; ++t)
+                    for (int st = 0; st < 16; ++st)
+                    {
+                        const auto b = ps.bass (0, t, st);
+                        if (! b.gate) continue;
+                        (t == 0 ? notes1 : notes2)++;
+                        if (t == 0) ++n1;
+                        if (b.slide) ++slides;
+                        const int pc = (((b.note + 12 * b.octave - res.root) % 12) + 12) % 12;
+                        if (std::find (sc.begin(), sc.end(), pc) == sc.end()) ++outOfScale;
+                    }
+                if (n1 == 0) ++empty1;
+                kicks += juce::countNumberOfBits (ps.drumRow (0, acido::BD));
+                snares += juce::countNumberOfBits (ps.drumRow (0, acido::SD) | ps.drumRow (0, acido::CP));
+                // la rigenerazione di una sola traccia resta nella tonalita'
+                const auto k = ps.key (0);
+                const auto r2 = acido::gen::generate (ps, 0, 0, style, rng);
+                if (r2.root != k.root || r2.scale != k.scale) ++outOfScale;
+            }
+            std::printf ("stile %-8s note fuori scala %d  medie per pattern: BASS1 %.1f  BASS2 %.1f  slide %.1f  casse %.1f  rullanti/clap %.1f  BASS1 vuoto %d\n",
+                         acido::gen::styleName (style), outOfScale, notes1 / 200.0, notes2 / 200.0, slides / 200.0, kicks / 200.0, snares / 200.0, empty1);
+            if (outOfScale > 0 || empty1 > 0) allOk = false;
+        }
+        // un esempio per stile in WAV
+        for (int style = 1; style < acido::gen::numStyles; ++style)
+        {
+            acido::PatternStore one;
+            const auto res = acido::gen::generate (one, 0, 3, style, rng);
+            setParam (dummy, "PATTERN", 1.f);
+            setParam (dummy, "BPM", res.bpm);
+            setParam (dummy, "SWING", res.swing);
+            setParam (dummy, "B1MUTE", 0); setParam (dummy, "B2MUTE", 0); setParam (dummy, "DRMUTE", 0);
+            setParam (dummy, "RUN", 1);
+            acido::Engine eng (one);
+            eng.prepare (sr, block);
+            const int total = (int) (4 * 16 * 15.0 / res.bpm * sr);
+            juce::AudioBuffer<float> all (2, total), buf (2, block);
+            juce::MidiBuffer midi;
+            for (int pos = 0; pos < total; pos += block)
+            {
+                const int len = juce::jmin (block, total - pos);
+                buf.setSize (2, len, false, false, true); buf.clear();
+                eng.process (buf, midi, reader, false, 0, 0);
+                for (int c = 0; c < 2; ++c) all.copyFrom (c, pos, buf, c, 0, len);
+            }
+            const float peak = all.getMagnitude (0, total);
+            std::printf ("esempio %-8s %s %s  %.1f BPM  swing %.1f%%  picco %.1f dBFS\n", acido::gen::styleName (style),
+                         acido::gen::keyName (res.root).toRawUTF8(), acido::gen::scaleName (res.scale), res.bpm, res.swing,
+                         juce::Decibels::gainToDecibels (peak, -120.f));
+            if (peak > 1.f || peak < 1e-3f) allOk = false;
+            auto f = outDir.getChildFile (juce::String ("random_") + juce::String (acido::gen::styleName (style)).removeCharacters (" &") + ".wav");
+            f.deleteFile();
+            if (auto os = std::unique_ptr<juce::OutputStream> (f.createOutputStream()))
+                if (auto w = std::unique_ptr<juce::AudioFormatWriter> (wav.createWriterFor (os.get(), sr, 2, 24, {}, 0)))
+                { os.release(); w->writeFromAudioSampleBuffer (all, 0, total); }
+            setParam (dummy, "RUN", 0);
+        }
     }
     std::printf (allOk ? "TUTTO OK\n" : "PROBLEMI\n");
     return allOk ? 0 : 1;

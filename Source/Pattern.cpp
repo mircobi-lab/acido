@@ -148,10 +148,25 @@ void PatternStore::loadFactory()
 }
 
 // ------------------------------------------------------------------------------------------- stato
+bool PatternStore::chainAppend (int pattern) noexcept
+{
+    const int n = chainLen.load();
+    if (n >= maxChain) return false;
+    chain[(size_t) n].store (juce::jlimit (0, numPatterns - 1, pattern));
+    chainLen.store (n + 1);
+    touch();
+    return true;
+}
+
 juce::ValueTree PatternStore::toValueTree() const
 {
     juce::ValueTree t ("PATTERNS");
     t.setProperty ("format", 1, nullptr);
+    {
+        juce::StringArray c;
+        for (int i = 0; i < chainLen.load(); ++i) c.add (juce::String (chain[(size_t) i].load()));
+        t.setProperty ("chain", c.joinIntoString (" "), nullptr);
+    }
     for (int p = 0; p < numPatterns; ++p)
     {
         juce::ValueTree pt ("P");
@@ -174,6 +189,13 @@ juce::ValueTree PatternStore::toValueTree() const
 void PatternStore::fromValueTree (const juce::ValueTree& t)
 {
     if (! t.hasType ("PATTERNS")) return;
+    {
+        auto c = juce::StringArray::fromTokens (t.getProperty ("chain").toString(), " ", "");
+        c.removeEmptyStrings();
+        int n = 0;
+        for (auto& v : c) if (n < maxChain) chain[(size_t) n++].store (juce::jlimit (0, numPatterns - 1, v.getIntValue()));
+        chainLen.store (n);
+    }
     for (int p = 0; p < numPatterns && p < t.getNumChildren(); ++p)
     {
         const auto pt = t.getChild (p);

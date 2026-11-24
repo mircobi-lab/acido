@@ -92,6 +92,21 @@ void SeqGrid::apply (int row, int step, bool fromDrag)
 void SeqGrid::mouseDown (const juce::MouseEvent& e)
 {
     int r, s;
+    // batteria: clic sul nome dello strumento = colpo (con WRITE e sequencer in moto si scrive nel pattern)
+    if (track == 2 && e.x < labelW)
+    {
+        for (int row = 0; row < numDrums; ++row)
+        {
+            const auto c = cellArea (row, 0);
+            if (e.y >= (int) c.getY() && e.y < (int) c.getBottom())
+            {
+                proc.engine.tapDrum (row);
+                if (onEdit) onEdit (juce::String ("TAP ") + drumShort (row));
+                return;
+            }
+        }
+        return;
+    }
     if (! hit (e.getPosition(), r, s)) return;
     dragRow = r; lastDragStep = s;
     apply (r, s, false);
@@ -284,6 +299,24 @@ AcidoPanel::AcidoPanel (AcidoProcessor& p)
     for (auto* b : { &clearBtn, &copyBtn, &pasteBtn, &factoryBtn }) addAndMakeVisible (*b);
 
     // generatore casuale
+    // scrittura in tempo reale e catena dei pattern
+    write = makeCtl (WRITE, "TRANSPORT", C::ledRed);
+    write->button.getProperties().set ("ledColour", ledHex (C::ledRed));
+    write->button.setTooltip ("WRITE: con il sequencer in moto, le note dei bassi (canale 1 e 2) e i colpi di batteria (canale 10, o clic sul nome dello strumento) si scrivono sul passo più vicino");
+    chain = makeCtl (CHAIN, "PATTERN", C::ledAmber);
+    chain->button.setTooltip ("CHAIN: suona la catena di pattern invece del pattern scelto, una battuta per voce");
+    chainAddBtn.setTooltip ("Aggiunge il pattern in modifica in fondo alla catena (fino a 16)");
+    chainAddBtn.onClick = [this, editPattern]
+    {
+        if (proc.patterns.chainAppend (editPattern())) showTouched ("CHAIN", chainText (-1));
+        else showTouched ("CHAIN", "PIENA: 16 PATTERN");
+    };
+    chainDelBtn.setTooltip ("Toglie l'ultimo pattern della catena");
+    chainDelBtn.onClick = [this] { proc.patterns.chainRemoveLast(); showTouched ("CHAIN", chainText (-1)); };
+    chainClrBtn.setTooltip ("Svuota la catena");
+    chainClrBtn.onClick = [this] { proc.patterns.chainClear(); showTouched ("CHAIN", "VUOTA"); };
+    for (auto* b : { &chainAddBtn, &chainDelBtn, &chainClrBtn }) addAndMakeVisible (*b);
+
     style = makeCtl (GENSTYLE, "RANDOM", C::ledAmber);
     soundLock = makeCtl (GENSOUND, "RANDOM", C::ledGreen);
     soundLock->button.getProperties().set ("ledColour", ledHex (C::ledGreen));
@@ -427,12 +460,30 @@ void AcidoPanel::placeCtl (Ctl& c, juce::Rectangle<int> cell)
     }
 }
 
+juce::String AcidoPanel::chainText (int current) const
+{
+    const int n = proc.patterns.chainLength();
+    if (n == 0) return "CHAIN VUOTA";
+    juce::String t ("CHAIN");
+    for (int i = 0; i < n; ++i)
+    {
+        const juce::String p (proc.patterns.chainAt (i) + 1);
+        t << " " << (i == current ? "[" + p + "]" : p);
+    }
+    return t;
+}
+
 // ------------------------------------------------------------------------------------------------ layout
 void AcidoPanel::resized()
 {
     // intestazione
     displayArea = { 340, 14, 330, 72 };
     run->button.setBounds (690, 44, 74, 32);
+    write->button.setBounds (690, 80, 74, 22);
+    chain->button.setBounds (922, 80, 64, 22);
+    chainAddBtn.setBounds (990, 80, 52, 22);
+    chainDelBtn.setBounds (1046, 80, 46, 22);
+    chainClrBtn.setBounds (1096, 80, 46, 22);
     placeCtl (*tempo, { 772, 22, 64, 70 });
     placeCtl (*swing, { 840, 22, 64, 70 });
     for (int i = 0; i < numPatterns; ++i) patBtn[i].setBounds (922 + i * 38, 44, 34, 32);
@@ -512,8 +563,10 @@ void AcidoPanel::paint (juce::Graphics& g)
         g.setColour (C::printDim);
         g.drawText ("BPM", in.withHeight (28.f), juce::Justification::centredRight, true);
         const juce::String clock = proc.engine.isHostClock() ? "CLOCK HOST" : "CLOCK INT";
-        const juce::String line2 = touched.isNotEmpty() ? touched + "  =  " + touchedValue
-                                                        : clock + (proc.engine.isRunning() ? "   RUNNING" : "   STOP");
+        juce::String idle = clock + (proc.engine.isRunning() ? "   RUNNING" : "   STOP");
+        if (proc.paramValue (WRITE) > .5f) idle << "   WRITE";
+        if (proc.paramValue (CHAIN) > .5f) idle << "   " << chainText (proc.engine.chainPosition());
+        const juce::String line2 = touched.isNotEmpty() ? touched + "  =  " + touchedValue : idle;
         g.setFont (ui::Fonts::label (14.f));
         g.setColour (C::print);
         g.drawText (line2.toUpperCase(), in.withY (in.getY() + 34.f).withHeight (20.f), juce::Justification::centredLeft, true);

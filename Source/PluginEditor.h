@@ -72,6 +72,10 @@ private:
     Ctl* swing = nullptr;
     Ctl* master = nullptr;
     Ctl* run = nullptr;
+    Ctl* write = nullptr;
+    Ctl* chain = nullptr;
+    juce::TextButton chainAddBtn { "+ PAT" }, chainDelBtn { "DEL" }, chainClrBtn { "CLR" };
+    juce::String chainText (int current) const;
     Ctl* style = nullptr;
     Ctl* soundLock = nullptr;
     juce::TextButton randomBtn { "RANDOM" }, rndTrackBtn { "RND TRK" };

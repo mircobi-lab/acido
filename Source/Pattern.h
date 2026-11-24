@@ -55,6 +55,14 @@ public:
     void setKey (int pattern, KeyInfo) noexcept;
 
     void clearTrack (int pattern, int track);       // track 0/1 basso, 2 batteria
+
+    // catena dei pattern: fino a 16 battute, ognuna con il suo pattern (0..7)
+    static constexpr int maxChain = 16;
+    int chainLength() const noexcept { return chainLen.load(); }
+    int chainAt (int i) const noexcept { return chain[(size_t) juce::jlimit (0, maxChain - 1, i)].load(); }
+    bool chainAppend (int pattern) noexcept;
+    void chainRemoveLast() noexcept { if (chainLen.load() > 0) { chainLen.fetch_sub (1); touch(); } }
+    void chainClear() noexcept { chainLen = 0; touch(); }
     void copyPattern (int from, int to);
     void loadFactory();
     uint32_t version() const noexcept { return ver.load(); }
@@ -66,6 +74,8 @@ private:
     std::array<std::atomic<uint32_t>, numPatterns * numBass * numSteps> b {};
     std::array<std::atomic<uint32_t>, numPatterns * (numDrums + 1)> d {};
     std::array<std::atomic<int>, numPatterns * 3> keys {};
+    std::array<std::atomic<int>, maxChain> chain {};
+    std::atomic<int> chainLen { 0 };
     std::atomic<uint32_t> ver { 1 };
     void touch() noexcept { ver.fetch_add (1); }
     static size_t bi (int p, int t, int s) noexcept { return (size_t) ((p * numBass + t) * numSteps + s); }

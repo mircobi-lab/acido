@@ -153,6 +153,9 @@ public:
     double currentBpm() const noexcept { return bpmUi.load(); }
     uint32_t drumHits() const noexcept { return hits.load(); }        // bit per strumento, azzerato dal pannello
     void clearDrumHits() noexcept { hits.store (0); }
+    int chainPosition() const noexcept { return chainPosUi.load(); }   // -1 = catena non in uso
+    // colpo di batteria dal pannello (clic sul nome dello strumento): suona e, con WRITE, si scrive
+    void tapDrum (int drum) noexcept { tapRequests.fetch_or (1u << juce::jlimit (0, numDrums - 1, drum)); }
 
 private:
     PatternStore& patterns;
@@ -181,14 +184,25 @@ private:
     std::atomic<int> playPatternUi { 0 };
     std::atomic<bool> runningUi { false }, hostClockUi { false };
     std::atomic<double> bpmUi { 125 };
-    std::atomic<uint32_t> hits { 0 };
+    std::atomic<uint32_t> hits { 0 }, tapRequests { 0 };
+    std::atomic<int> chainPosUi { -1 };
+
+    // scrittura in tempo reale (tap write)
+    double curOddStart = 1.0;
+    long long skipDrumIdx = std::numeric_limits<long long>::min();
+    uint32_t skipDrumMask = 0;
+    long long skipBassIdx[numBass] { std::numeric_limits<long long>::min(), std::numeric_limits<long long>::min() };
+    int lastWritten[numBass] { -1, -1 };
+    long long nearestStep (double& lateOut) const noexcept;
+    void writeDrum (int drum, bool accent, const ParamReader&) noexcept;
+    void writeBass (int t, int note, int vel, bool legato, const ParamReader&) noexcept;
 
     static long long stepIndexAt (double p, double oddStart) noexcept;
     static double stepStart (long long idx, double oddStart) noexcept;
     void onStep (long long idx, double oddStart, const ParamReader&) noexcept;
     void stopSequencer() noexcept;
     void handleMidi (const juce::MidiMessage&, const ParamReader&) noexcept;
-    void bassNoteOn (int t, int note, int vel) noexcept;
+    void bassNoteOn (int t, int note, int vel, const ParamReader&) noexcept;
     void bassNoteOff (int t, int note) noexcept;
 };
 }

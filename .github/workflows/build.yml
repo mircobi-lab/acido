@@ -41,6 +41,20 @@ jobs:
           name: mac
           path: build/MBStudio91Acido_artefacts/Release/*.zip
 
+  tests:
+    name: Prove WRITE e CHAIN (Linux)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Librerie
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libfreetype-dev libfontconfig1-dev ninja-build
+      - name: Configura
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DACIDO_BUILD_TESTS=ON
+      - name: Compila
+        run: cmake --build build --target acido_writetest
+      - name: Esegui
+        run: ./build/acido_writetest_artefacts/Release/acido_writetest
+
   windows:
     name: Windows x64
     runs-on: windows-latest
@@ -64,7 +78,7 @@ jobs:
   release:
     name: Pubblica in Releases
     if: github.ref == 'refs/heads/main'
-    needs: [mac, windows]
+    needs: [mac, windows, tests]
     runs-on: ubuntu-latest
     permissions:
       contents: write

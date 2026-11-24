@@ -396,6 +396,9 @@ void Engine::stopSequencer() noexcept
     running = false;
     lastStep = -1;
     needPattern = true;
+    lastWritten[0] = lastWritten[1] = -1;
+    skipDrumIdx = skipBassIdx[0] = skipBassIdx[1] = std::numeric_limits<long long>::min();
+    chainPosUi.store (-1);
     for (auto& s : stepNow) s.store (-1);
 }
 
@@ -409,7 +412,20 @@ void Engine::onStep (long long idx, double oddStart, const ParamReader& pr) noex
 {
     if (needPattern || wrapStep (idx, 16) == 0)
     {
-        playPattern = juce::jlimit (0, numPatterns - 1, pr.i (PATTERN) - 1);
+        const int cl = patterns.chainLength();
+        if (pr.b (CHAIN) && cl > 0)
+        {
+            // catena: la battuta (16 passi) sceglie la voce della catena, così in una DAW la posizione decide il pattern
+            const long long bar = idx >= 0 ? idx / 16 : (idx - 15) / 16;
+            const int cp = wrapStep (bar, cl);
+            playPattern = patterns.chainAt (cp);
+            chainPosUi.store (cp);
+        }
+        else
+        {
+            playPattern = juce::jlimit (0, numPatterns - 1, pr.i (PATTERN) - 1);
+            chainPosUi.store (-1);
+        }
         needPattern = false;
     }
     const int pat = playPattern;
@@ -423,9 +439,11 @@ void Engine::onStep (long long idx, double oddStart, const ParamReader& pr) noex
             const bool acc = patterns.drum (pat, accentRow, s);
             const float g = acc ? .72f + .55f * pr[AC] : .72f;
             uint32_t hit = 0;
+            // un colpo appena scritto in anticipo su questo passo è già suonato: non si ribatte
+            const uint32_t skip = idx == skipDrumIdx ? skipDrumMask : 0u;
             for (int r = 0; r < numDrums; ++r)
-                if (r != OH && patterns.drum (pat, r, s)) { drums.trigger (r, g); hit |= 1u << r; }
-            if (patterns.drum (pat, OH, s)) { drums.trigger (OH, g); hit |= 1u << OH; }
+                if (r != OH && ! (skip & (1u << r)) && patterns.drum (pat, r, s)) { drums.trigger (r, g); hit |= 1u << r; }
+            if (! (skip & (1u << OH)) && patterns.drum (pat, OH, s)) { drums.trigger (OH, g); hit |= 1u << OH; }
             if (hit) hits.fetch_or (hit);
         }
     }
@@ -438,7 +456,7 @@ void Engine::onStep (long long idx, double oddStart, const ParamReader& pr) noex
         const int s = wrapStep (idx, juce::jlimit (1, 16, pr.i (lenP)));
         stepNow[(size_t) t].store (s);
         BassStep st = pr.b (muteP) ? BassStep() : patterns.bass (pat, t, s);
-        if (heldCount[t] > 0) { prevStep[t] = st; continue; }   // la tastiera MIDI ha la precedenza
+        if (heldCount[t] > 0 || idx == skipBassIdx[t]) { prevStep[t] = st; continue; }   // la tastiera MIDI ha la precedenza
         if (st.gate)
         {
             const bool slideIn = prevStep[t].gate && prevStep[t].slide && bass[t].isGateOn();
@@ -454,10 +472,60 @@ void Engine::onStep (long long idx, double oddStart, const ParamReader& pr) noex
     }
 }
 
-void Engine::bassNoteOn (int t, int note, int vel) noexcept
+// ------------------------------------------------------------------------------------------- tap write
+long long Engine::nearestStep (double& late) const noexcept
+{
+    // il passo più vicino alla posizione attuale: oltre metà passo si scrive sul passo dopo
+    const long long idx = stepIndexAt (pos, curOddStart);
+    const double a = stepStart (idx, curOddStart), b = stepStart (idx + 1, curOddStart);
+    late = pos - a;
+    return (pos - a) > (b - a) * .5 ? idx + 1 : idx;
+}
+
+void Engine::writeDrum (int drum, bool accent, const ParamReader& pr) noexcept
+{
+    double late;
+    const long long idx = nearestStep (late);
+    const int s = wrapStep (idx, juce::jlimit (1, 16, pr.i (DRLEN)));
+    patterns.setDrum (playPattern, drum, s, true);
+    if (accent) patterns.setDrum (playPattern, accentRow, s, true);
+    if (idx > lastStep)
+    {
+        if (skipDrumIdx != idx) { skipDrumIdx = idx; skipDrumMask = 0; }
+        skipDrumMask |= 1u << drum;
+    }
+}
+
+void Engine::writeBass (int t, int note, int vel, bool legato, const ParamReader& pr) noexcept
+{
+    double late;
+    const long long idx = nearestStep (late);
+    const int s = wrapStep (idx, juce::jlimit (1, 16, pr.i (t == 0 ? B1LEN : B2LEN)));
+    // la nota diventa nota + ottava del passo, riferita a C2 (36) meno la trasposizione della traccia
+    const int rel = note - 36 - pr.i (t == 0 ? B1TRANS : B2TRANS);
+    // ottava 0 copre C..C sopra (0..12): si sale o si scende solo fuori da lì
+    const int oct = rel > 12 ? 1 : (rel < 0 ? -1 : 0);
+    BassStep st;
+    st.note = juce::jlimit (0, 12, rel - 12 * oct);
+    st.octave = oct;
+    st.gate = true;
+    st.accent = vel > 100;
+    patterns.setBass (playPattern, t, s, st);
+    if (legato && lastWritten[t] >= 0 && lastWritten[t] != s)
+    {
+        auto prev = patterns.bass (playPattern, t, lastWritten[t]);
+        prev.slide = true;
+        patterns.setBass (playPattern, t, lastWritten[t], prev);
+    }
+    lastWritten[t] = s;
+    if (idx > lastStep) skipBassIdx[t] = idx;
+}
+
+void Engine::bassNoteOn (int t, int note, int vel, const ParamReader& pr) noexcept
 {
     auto& h = held[t];
     int& n = heldCount[t];
+    if (running && pr.b (WRITE)) writeBass (t, note, vel, n > 0, pr);
     for (int i = 0; i < n; ++i) if (h[(size_t) i] == note) { for (int j = i; j < n - 1; ++j) h[(size_t) j] = h[(size_t) j + 1]; --n; break; }
     const bool legato = n > 0 && bass[t].isGateOn();
     if (n < (int) h.size()) h[(size_t) n++] = note;
@@ -512,13 +580,14 @@ void Engine::handleMidi (const juce::MidiMessage& m, const ParamReader& pr) noex
         if (d >= 0)
         {
             const int v = m.getVelocity();
+            if (running && pr.b (WRITE)) writeDrum (d, v > 100, pr);
             drums.trigger (d, .72f * (float) v / 127.f + (v > 100 ? .55f * pr[AC] : 0.f));
             hits.fetch_or (1u << d);
         }
         return;
     }
     const int t = ch == 2 ? 1 : 0;      // canale 2: BASS 2, tutti gli altri (tranne il 10): BASS 1
-    if (m.isNoteOn()) bassNoteOn (t, m.getNoteNumber(), m.getVelocity());
+    if (m.isNoteOn()) bassNoteOn (t, m.getNoteNumber(), m.getVelocity(), pr);
     else if (m.isNoteOff()) bassNoteOff (t, m.getNoteNumber());
 }
 
@@ -581,6 +650,7 @@ void Engine::process (juce::AudioBuffer<float>& buffer, const juce::MidiBuffer& 
     const double bpm = juce::jlimit (20.0, 400.0, hostPlaying && hostBpm > 0 ? hostBpm : (double) pr[BPM]);
     const double inc = bpm / 60.0 * 4.0 / sr;
     const double oddStart = 2.0 * juce::jlimit (50.0, 75.0, (double) pr[SWING]) / 100.0;
+    curOddStart = oddStart;
     static const double dlBeats[6] = { .25, .5, .75, 1.0, 1.5, 2.0 };
     const float dlTime = (float) (dlBeats[juce::jlimit (0, 5, pr.i (DLTIME))] * 60.0 / bpm * sr);
 
@@ -603,6 +673,16 @@ void Engine::process (juce::AudioBuffer<float>& buffer, const juce::MidiBuffer& 
         else if (! pr.b (RUN) && running) stopSequencer();
     }
     hostRun = hostPlaying;
+
+    // colpi dal pannello: suonano subito e, con WRITE in riproduzione, finiscono nel pattern
+    if (const uint32_t taps = tapRequests.exchange (0u))
+        for (int d = 0; d < numDrums; ++d)
+            if (taps & (1u << d))
+            {
+                if (running && pr.b (WRITE)) writeDrum (d, false, pr);
+                drums.trigger (d, .72f);
+                hits.fetch_or (1u << d);
+            }
 
     auto midiIt = midi.cbegin();
     const auto midiEnd = midi.cend();

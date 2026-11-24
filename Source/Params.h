@@ -63,7 +63,9 @@
     X (DLRET,   "DLRET",   "Delay Return",      "RETURN",    R, 0, 1, .7f, 0, "", "%") \
     X (MASTER,  "MASTER",  "Master Volume",     "MASTER",    R, -36, 6, -7, 0, "", "dB") \
     X (GENSTYLE,"GENSTYLE","Random Style",      "STYLE",     C, 0, 5, 0, 0, "AUTO|ACID|TECHNO|FUNK|HIP HOP|R&B", "") \
-    X (GENSOUND,"GENSOUND","Random Sounds",     "SND",       T, 0, 1, 1, 0, "", "")
+    X (GENSOUND,"GENSOUND","Random Sounds",     "SND",       T, 0, 1, 1, 0, "", "") \
+    X (WRITE,   "WRITE",   "Tap Write",         "WRITE",     T, 0, 1, 0, 0, "", "") \
+    X (CHAIN,   "CHAIN",   "Pattern Chain",     "CHAIN",     T, 0, 1, 0, 0, "", "")
 
 namespace acido
 {

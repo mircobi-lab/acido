@@ -46,6 +46,14 @@ xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"MBStudio91 acido.v
 - **MIDI**: canale 2 suona BASS 2, canale 10 la batteria (note GM: 36 cassa, 38 rullante, 39 clap, 42 charleston chiuso, 46 aperto, 49 piatto, 56 campanaccio, tom su 41-50), tutti gli altri canali suonano BASS 1. Velocity sopra 100 vale come accento; sui bassi una nota suonata mentre la precedente è ancora tenuta fa lo slide. Mentre si suona un basso da tastiera, il sequencer di quel basso si fa da parte.
 - PANIC (anche CC 120), MIDI LEARN con clic destro su qualsiasi controllo, profili pronti per i controller più diffusi, finestra ridimensionabile.
 
+## Scrittura in tempo reale e catene
+
+- **WRITE** (sotto RUN, LED rosso): con il sequencer in moto, quello che suoni finisce nel pattern che sta suonando, sul passo più vicino. Un colpo che arriva oltre metà passo va sul passo dopo, e quel passo non lo ribatte una seconda volta.
+  - Batteria: note sul canale MIDI 10 (le stesse note GM di sempre), oppure clic sul nome dello strumento nella griglia DRUMS. Velocity sopra 100 accende anche l'ACCENT del passo.
+  - Bassi: canale 1 per BASS 1, canale 2 per BASS 2. La nota diventa nota e ottava del passo, tenendo conto del TRANSPOSE della traccia (ottava 0 = da C2 a C3). Velocity sopra 100 = accento; una nota suonata legata alla precedente accende lo SLIDE sul passo prima.
+  - Senza WRITE la tastiera suona e basta, come prima.
+- **CHAIN** (sotto i pattern): suona una catena di pattern, una battuta ciascuno, fino a 16. **+ PAT** aggiunge in fondo il pattern in modifica, **DEL** toglie l'ultimo, **CLR** svuota. Il display mostra la catena con la battuta in corso tra parentesi quadre. In una DAW è la posizione del progetto a decidere il pattern, così il giro torna uguale ogni volta che riparti dallo stesso punto. La catena si salva col progetto.
+
 ## Prove fatte su questa versione
 
 - Render offline degli 8 pattern a 48 kHz (`tools/render.cpp`): nessun valore non valido, picchi tra -4 e -7 dBFS, RMS tra -17 e -22 dBFS con il MASTER a -7 dB. Un blocco da 256 campioni usa tra l'1,6 e il 2,9% del tempo disponibile (server Linux, un solo core).
@@ -55,10 +63,11 @@ xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"MBStudio91 acido.v
 - Generatore: 200 pattern per stile senza nessuna nota fuori scala. Rigenerando una sola traccia la tonalità resta la stessa. Un esempio per stile, fatto suonare e misurato, ha il picco tra -2,7 e -4,9 dBFS.
 - Compilazione VST3 e Standalone su Linux senza errori. Il controllo con pluginval (strictness 10) gira su GitHub Actions a ogni aggiornamento.
 
+WRITE e CHAIN hanno le loro prove automatiche (`tools/write_test.cpp`, eseguite da GitHub prima di ogni release): colpi in anticipo e in ritardo, accento, nota, ottava e slide dei bassi, ordine della catena battuta per battuta, ritorno al pattern scelto, salvataggio.
+
 ## Limiti di questa prima versione
 
 - Non è un clone circuitale: filtro, accento e voci della batteria sono modelli scritti a orecchio e su dati pubblici, non misurati su strumenti reali.
-- Il sequencer non ha ancora la scrittura in tempo reale (tap write) né le catene di pattern.
 - Niente uscite separate per gli strumenti della batteria: tutto esce sulla coppia stereo principale.
 
 ## Compilare in proprio
